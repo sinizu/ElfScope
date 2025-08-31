@@ -1,0 +1,6 @@
+pyelftools>=0.29
+capstone>=4.0.2
+networkx>=2.8
+pytest>=7.0.0
+pytest-cov>=4.0.0
+click>=8.0.0
