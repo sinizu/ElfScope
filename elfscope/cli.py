@@ -18,6 +18,7 @@ import click
 from .core.elf_parser import ElfParser
 from .core.call_analyzer import CallAnalyzer
 from .core.path_finder import PathFinder
+from .core.stack_analyzer import StackAnalyzer
 from .utils.json_exporter import JsonExporter
 
 
@@ -318,6 +319,176 @@ def summary(elf_file: str, output: str):
             
     except Exception as e:
         click.echo(f"✗ 生成摘要报告失败: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument('elf_file', type=click.Path(exists=True, readable=True))
+@click.argument('function_name')
+@click.option('--output', '-o', help='输出 JSON 文件路径（可选）')
+def stack(elf_file: str, function_name: str, output: Optional[str]):
+    """
+    分析指定函数的栈使用情况
+    
+    分析函数的本地栈帧大小以及通过调用链的最大栈消耗。
+    
+    \b
+    示例:
+        elfscope stack /path/to/binary main
+        elfscope stack /path/to/binary fibonacci_recursive -o stack_info.json
+    """
+    try:
+        # 初始化分析器
+        elf_parser = ElfParser(elf_file)
+        call_analyzer = CallAnalyzer(elf_parser)
+        stack_analyzer = StackAnalyzer(call_analyzer)
+        
+        click.echo(f"正在分析函数 '{function_name}' 的栈使用情况...")
+        
+        # 分析栈使用
+        stack_info = stack_analyzer.get_function_stack_info(function_name)
+        
+        if not stack_info['found']:
+            click.echo(f"✗ {stack_info['error']}", err=True)
+            sys.exit(1)
+        
+        # 显示结果
+        click.echo(f"\n函数栈分析: {function_name}")
+        click.echo("=" * 50)
+        click.echo(f"架构:           {stack_info['architecture']}")
+        click.echo(f"本地栈帧:       {stack_info['local_stack_frame']} 字节")
+        click.echo(f"最大总栈消耗:   {stack_info['max_total_stack']} 字节")
+        click.echo(f"调用栈消耗:     {stack_info['stack_consumed_by_calls']} 字节")
+        
+        # 显示最大栈消耗的调用路径
+        if stack_info.get('max_stack_call_path'):
+            click.echo(f"\n最大栈消耗调用路径:")
+            path = stack_info['max_stack_call_path']
+            for i, func in enumerate(path):
+                indent = "  " * i
+                click.echo(f"{indent}└─ {func}")
+        
+        # 显示路径详情（如果有的话）
+        if stack_info.get('max_stack_path_details'):
+            click.echo(f"\n路径栈消耗详情:")
+            for detail in stack_info['max_stack_path_details']:
+                recursive_mark = " (递归)" if detail.get('is_recursive') else ""
+                external_mark = " (外部)" if detail.get('is_external') else ""
+                click.echo(f"  {detail['function']}: {detail['local_stack']}B → "
+                          f"累计: {detail['cumulative_stack']}B{recursive_mark}{external_mark}")
+        
+        if stack_info['called_functions']:
+            click.echo(f"\n直接调用的函数 ({len(stack_info['called_functions'])}):")
+            for callee in stack_info['called_functions']:
+                external_mark = " (外部)" if callee['external'] else ""
+                click.echo(f"  {callee['function']}: {callee['stack_frame']} 字节{external_mark}")
+        
+        # 输出到文件（如果指定）
+        if output:
+            exporter = JsonExporter()
+            success = exporter.export_data(stack_info, output)
+            if success:
+                click.echo(f"\n✓ 栈分析结果已保存到: {output}")
+            else:
+                click.echo(f"\n✗ 保存结果失败", err=True)
+                
+    except Exception as e:
+        click.echo(f"✗ 栈分析失败: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command(name='stack-summary')
+@click.argument('elf_file', type=click.Path(exists=True, readable=True))
+@click.option('--output', '-o', help='输出 JSON 文件路径（可选）')
+@click.option('--top', '-t', default=10, help='显示栈消耗最大的函数数量')
+def stack_summary(elf_file: str, output: Optional[str], top: int):
+    """
+    生成程序的栈使用情况摘要
+    
+    分析整个程序的栈使用模式，找出栈消耗最大的函数。
+    
+    \b
+    示例:
+        elfscope stack-summary /path/to/binary
+        elfscope stack-summary /path/to/binary -o stack_summary.json -t 20
+    """
+    try:
+        # 初始化分析器
+        elf_parser = ElfParser(elf_file)
+        call_analyzer = CallAnalyzer(elf_parser)
+        stack_analyzer = StackAnalyzer(call_analyzer)
+        
+        click.echo("正在分析程序的栈使用情况...")
+        
+        # 生成摘要
+        summary = stack_analyzer.get_stack_summary()
+        heavy_functions = stack_analyzer.find_stack_heavy_functions(limit=top)
+        
+        # 显示摘要
+        click.echo(f"\n栈使用摘要: {elf_file}")
+        click.echo("=" * 50)
+        click.echo(f"架构:               {summary['architecture']}")
+        click.echo(f"分析函数总数:       {summary['total_functions_analyzed']}")
+        click.echo(f"有栈消耗函数:       {summary['functions_with_stack']}")
+        click.echo(f"最大本地栈帧:       {summary['max_local_stack_frame']} 字节")
+        click.echo(f"最大总栈消耗:       {summary['max_total_stack_consumption']} 字节")
+        
+        if summary['function_with_max_local_stack']:
+            click.echo(f"最大本地栈函数:     {summary['function_with_max_local_stack']}")
+        if summary['function_with_max_total_stack']:
+            click.echo(f"最大总栈函数:       {summary['function_with_max_total_stack']}")
+        
+        # 显示最大栈消耗的调用路径
+        if summary.get('max_total_stack_call_path'):
+            click.echo(f"\n最大栈消耗调用路径:")
+            path = summary['max_total_stack_call_path']
+            for i, func in enumerate(path):
+                indent = "  " * i
+                click.echo(f"{indent}└─ {func}")
+        
+        click.echo(f"\n栈指针寄存器:       {summary['stack_pointer_register']}")
+        click.echo(f"栈对齐要求:         {summary['stack_alignment']} 字节")
+        
+        # 栈使用分布
+        dist = summary['stack_distribution']
+        click.echo(f"\n栈使用分布:")
+        click.echo(f"  小栈消耗 (<64B):     {dist['small']} 函数")
+        click.echo(f"  中等栈消耗 (64-256B): {dist['medium']} 函数") 
+        click.echo(f"  大栈消耗 (256-1KB):   {dist['large']} 函数")
+        click.echo(f"  巨大栈消耗 (>1KB):    {dist['huge']} 函数")
+        
+        # 栈消耗最大的函数
+        if heavy_functions:
+            click.echo(f"\n栈消耗最大的 {min(top, len(heavy_functions))} 个函数:")
+            for i, func in enumerate(heavy_functions):
+                ratio_text = f" (比例: {func['stack_ratio']:.1f}x)" if func['stack_ratio'] > 0 else ""
+                click.echo(f"  {i+1:2d}. {func['function']: <25} "
+                          f"总计: {func['max_total_stack']:4d}B "
+                          f"本地: {func['local_stack_frame']:4d}B{ratio_text}")
+                
+                # 显示调用路径（简化版本，只显示前5个函数）
+                if func.get('max_stack_call_path') and len(func['max_stack_call_path']) > 1:
+                    path = func['max_stack_call_path'][:5]  # 限制显示长度
+                    path_str = " → ".join(path)
+                    if len(func['max_stack_call_path']) > 5:
+                        path_str += " → ..."
+                    click.echo(f"      路径: {path_str}")
+        
+        # 输出到文件（如果指定）
+        if output:
+            full_data = {
+                'summary': summary,
+                'heavy_functions': heavy_functions
+            }
+            exporter = JsonExporter()
+            success = exporter.export_data(full_data, output)
+            if success:
+                click.echo(f"\n✓ 栈摘要已保存到: {output}")
+            else:
+                click.echo(f"\n✗ 保存结果失败", err=True)
+                
+    except Exception as e:
+        click.echo(f"✗ 栈分析失败: {e}", err=True)
         sys.exit(1)
 
 

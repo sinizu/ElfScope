@@ -447,3 +447,20 @@ class JsonExporter:
         except Exception as e:
             logging.error(f"导出函数详情时出错: {e}")
             return False
+    
+    def export_data(self, data: Dict[str, Any], output_file: str) -> bool:
+        """
+        导出任意数据到 JSON 文件
+        
+        Args:
+            data: 要导出的数据
+            output_file: 输出文件路径
+            
+        Returns:
+            导出是否成功
+        """
+        try:
+            return self._write_json_file(data, output_file)
+        except Exception as e:
+            logging.error(f"导出数据时出错: {e}")
+            return False
