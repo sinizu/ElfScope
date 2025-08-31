@@ -23,6 +23,11 @@ void complex_recursive_chain(int n);
 void utility_function_1(void);
 void utility_function_2(void);
 void utility_function_3(void);
+void deep_call_chain_1(int level);
+void deep_call_chain_2(int level);
+void deep_call_chain_3(int level);
+void deep_call_chain_4(int level);
+void deep_call_chain_5(int level);
 
 // ========================================
 // 工具函数组
