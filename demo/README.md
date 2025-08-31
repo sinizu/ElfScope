@@ -15,15 +15,15 @@
 - **`README.md`** - 本说明文档
 
 ### 分析结果文件
-演示过程会生成以下分析结果文件：
-- **`demo_analysis.json`** - 完整的函数调用关系分析
-- **`demo_fibonacci_paths.json`** - 从main到fibonacci_recursive的调用路径
-- **`demo_utility_paths.json`** - 所有调用utility_function_1的路径
-- **`demo_main_details.json`** - main函数的详细分析
-- **`demo_summary.json`** - 分析摘要报告
-- **`demo_stack_main.json`** - main函数的栈使用分析 ⭐
-- **`demo_stack_summary.json`** - 程序栈使用摘要 ⭐
-- **`demo_complete.json`** - 完整分析报告（包含所有信息）
+演示过程会生成以下分析结果文件（保存在 `output/` 目录中）：
+- **`output/demo_analysis.json`** - 完整的函数调用关系分析
+- **`output/demo_fibonacci_paths.json`** - 从main到fibonacci_recursive的调用路径
+- **`output/demo_utility_paths.json`** - 所有调用utility_function_1的路径
+- **`output/demo_main_details.json`** - main函数的详细分析
+- **`output/demo_summary.json`** - 分析摘要报告
+- **`output/demo_stack_main.json`** - main函数的栈使用分析 ⭐
+- **`output/demo_stack_summary.json`** - 程序栈使用摘要 ⭐
+- **`output/demo_complete.json`** - 完整分析报告（包含所有信息）
 
 ## 🚀 快速开始
 
@@ -82,7 +82,7 @@ python3 -m elfscope.cli summary test_program -o summary.json
 #### 6. 栈使用分析 ⭐ 新功能
 ```bash
 # 分析特定函数的栈使用情况
-python3 -m elfscope.cli stack test_program main -o main_stack.json
+python3 -m elfscope.cli stack test_program main -o output/main_stack.json
 
 # 分析递归函数的栈消耗
 python3 -m elfscope.cli stack test_program fibonacci_recursive
@@ -91,12 +91,12 @@ python3 -m elfscope.cli stack test_program fibonacci_recursive
 python3 -m elfscope.cli stack test_program deep_call_chain_1
 
 # 生成程序的栈使用摘要
-python3 -m elfscope.cli stack-summary test_program -o stack_summary.json -t 10
+python3 -m elfscope.cli stack-summary test_program -o output/stack_summary.json -t 10
 ```
 
 #### 7. 完整分析
 ```bash
-python3 -m elfscope.cli complete test_program -o complete.json
+python3 -m elfscope.cli complete test_program -o output/complete.json
 ```
 
 ## 📊 期望的分析结果

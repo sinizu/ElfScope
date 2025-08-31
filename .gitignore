@@ -133,6 +133,7 @@ dmypy.json
 analysis_results/
 test_binaries/
 temp_files/
+demo/output/
 
 # IDE files
 .vscode/

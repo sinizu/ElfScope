@@ -17,6 +17,9 @@ if [[ ! -f "test_program.c" ]]; then
     exit 1
 fi
 
+# 创建输出目录
+mkdir -p output
+
 # 检查Python3
 if ! command -v python3 &> /dev/null; then
     echo "❌ 错误: 未找到python3，请先安装Python 3"
@@ -62,22 +65,22 @@ case $choice in
         
         echo ""
         echo "📋 2/4: 快速分析调用关系"
-        python3 -m elfscope.cli analyze test_program -o quick_analysis.json
+        python3 -m elfscope.cli analyze test_program -o output/quick_analysis.json
         
         echo ""
         echo "📋 3/4: 查找一个调用路径示例"
-        python3 -m elfscope.cli paths test_program fibonacci_recursive -s main -o quick_paths.json
+        python3 -m elfscope.cli paths test_program fibonacci_recursive -s main -o output/quick_paths.json
         
         echo ""
         echo "📋 4/4: 生成摘要报告"
-        python3 -m elfscope.cli summary test_program -o quick_summary.json
+        python3 -m elfscope.cli summary test_program -o output/quick_summary.json
         
         echo ""
         echo "✅ 快速演示完成!"
         echo "📁 生成的文件:"
-        echo "   - quick_analysis.json (调用关系分析)"
-        echo "   - quick_paths.json (调用路径)"
-        echo "   - quick_summary.json (摘要报告)"
+        echo "   - output/quick_analysis.json (调用关系分析)"
+        echo "   - output/quick_paths.json (调用路径)"
+        echo "   - output/quick_summary.json (摘要报告)"
         ;;
     3)
         echo ""
@@ -96,12 +99,12 @@ case $choice in
         
         echo ""
         echo "📋 4/4: 生成栈使用摘要"
-        python3 -m elfscope.cli stack-summary test_program -o stack_demo_summary.json -t 5
+        python3 -m elfscope.cli stack-summary test_program -o output/stack_demo_summary.json -t 5
         
         echo ""
         echo "✅ 栈分析演示完成!"
         echo "📁 生成的文件:"
-        echo "   - stack_demo_summary.json (栈使用摘要)"
+        echo "   - output/stack_demo_summary.json (栈使用摘要)"
         echo ""
         echo "🔬 主要发现:"
         echo "   - main函数是最大栈消耗函数 (~1232字节)"
@@ -121,26 +124,26 @@ case $choice in
         echo ""
         echo "步骤2: 分析函数调用关系"
         read -p "按回车执行..."
-        python3 -m elfscope.cli analyze test_program -o manual_analysis.json
+        python3 -m elfscope.cli analyze test_program -o output/manual_analysis.json
         
         echo ""
         echo "步骤3: 查找调用路径 (main -> fibonacci_recursive)"
         read -p "按回车执行..."
-        python3 -m elfscope.cli paths test_program fibonacci_recursive -s main -o manual_paths.json
+        python3 -m elfscope.cli paths test_program fibonacci_recursive -s main -o output/manual_paths.json
         
         echo ""
         echo "步骤4: 分析main函数详情"
         read -p "按回车执行..."
-        python3 -m elfscope.cli function test_program main -o manual_main.json
+        python3 -m elfscope.cli function test_program main -o output/manual_main.json
         
         echo ""
         echo "步骤5: 栈使用分析 ⭐ 新功能"
         read -p "按回车执行栈分析..."
         echo "  分析main函数栈使用:"
-        python3 -m elfscope.cli stack test_program main -o manual_main_stack.json
+        python3 -m elfscope.cli stack test_program main -o output/manual_main_stack.json
         echo ""
         echo "  生成栈使用摘要:"
-        python3 -m elfscope.cli stack-summary test_program -o manual_stack_summary.json -t 3
+        python3 -m elfscope.cli stack-summary test_program -o output/manual_stack_summary.json -t 3
         
         echo ""
         echo "✅ 单步演示完成!"

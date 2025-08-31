@@ -189,7 +189,11 @@ def main():
         return
     
     demo_dir = script_dir
+    output_dir = demo_dir / "output"
     test_program = "./test_program"
+    
+    # 创建输出目录
+    output_dir.mkdir(exist_ok=True)
     
     # 步骤1: 查看基本信息
     print_step(1, "查看测试程序基本信息")
@@ -200,7 +204,7 @@ def main():
     
     # 步骤2: 完整调用关系分析
     print_step(2, "分析函数调用关系")
-    analysis_file = demo_dir / "demo_analysis.json"
+    analysis_file = output_dir / "demo_analysis.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "analyze", str(demo_dir / "test_program"),
@@ -212,7 +216,7 @@ def main():
     
     # 步骤3: 查找特定调用路径
     print_step(3, "查找调用路径 (main → fibonacci_recursive)")
-    paths_file = demo_dir / "demo_fibonacci_paths.json"
+    paths_file = output_dir / "demo_fibonacci_paths.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "paths", str(demo_dir / "test_program"),
@@ -225,7 +229,7 @@ def main():
     
     # 步骤4: 查找所有到特定函数的路径
     print_step(4, "查找所有调用路径 (→ utility_function_1)")
-    all_paths_file = demo_dir / "demo_utility_paths.json"
+    all_paths_file = output_dir / "demo_utility_paths.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "paths", str(demo_dir / "test_program"),
@@ -238,7 +242,7 @@ def main():
     
     # 步骤5: 分析特定函数
     print_step(5, "分析特定函数 (main)")
-    function_file = demo_dir / "demo_main_details.json"
+    function_file = output_dir / "demo_main_details.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "function", str(demo_dir / "test_program"),
@@ -248,7 +252,7 @@ def main():
     
     # 步骤6: 生成摘要报告
     print_step(6, "生成分析摘要")
-    summary_file = demo_dir / "demo_summary.json"
+    summary_file = output_dir / "demo_summary.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "summary", str(demo_dir / "test_program"),
@@ -262,7 +266,7 @@ def main():
     print_step(7, "分析函数栈使用情况 ⭐ 新功能")
     
     # 7.1: 分析main函数的栈使用
-    stack_main_file = demo_dir / "demo_stack_main.json"
+    stack_main_file = output_dir / "demo_stack_main.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "stack", str(demo_dir / "test_program"),
@@ -282,7 +286,7 @@ def main():
     ], "分析deep_call_chain_1的栈使用情况（不保存到文件）")
     
     # 7.3: 生成程序栈使用摘要
-    stack_summary_file = demo_dir / "demo_stack_summary.json"
+    stack_summary_file = output_dir / "demo_stack_summary.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "stack-summary", str(demo_dir / "test_program"),
@@ -295,7 +299,7 @@ def main():
     
     # 步骤8: 完整分析
     print_step(8, "完整分析 (包含所有信息)")
-    complete_file = demo_dir / "demo_complete.json"
+    complete_file = output_dir / "demo_complete.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
         "complete", str(demo_dir / "test_program"),
@@ -320,18 +324,18 @@ def main():
     ]
     
     for filename, description in demo_files:
-        filepath = demo_dir / filename
+        filepath = output_dir / filename
         if filepath.exists():
             size = filepath.stat().st_size
             print(f"   ✅ {filename:<25} ({size:,} bytes) - {description}")
         else:
             print(f"   ❌ {filename:<25} - {description} (未生成)")
     
-    print(f"\n📂 所有演示文件保存在: {demo_dir}")
+    print(f"\n📂 所有演示文件保存在: {output_dir}")
     print("\n🔍 查看分析结果:")
-    print("   - 使用 jq 命令查看JSON文件: jq . demo_analysis.json")
+    print("   - 使用 jq 命令查看JSON文件: jq . output/demo_analysis.json")
     print("   - 使用文本编辑器查看详细内容")
-    print("   - 参考 demo_README.md 了解更多使用方法")
+    print("   - 参考 README.md 了解更多使用方法")
     
     print("\n🚀 ElfScope 演示完成! 感谢使用!")
 
