@@ -39,12 +39,13 @@ fi
 
 echo ""
 echo "选择演示模式:"
-echo "1) 🎬 自动化完整演示 (推荐，约2-3分钟)"
+echo "1) 🎬 自动化完整演示 (推荐，约3-4分钟)"
 echo "2) ⚡ 快速基本演示 (仅核心功能，约1分钟)"
-echo "3) 🎯 单步手动演示 (交互式)"
-echo "4) 🔍 仅查看程序信息"
+echo "3) 🏗️ 栈分析演示 (新功能展示，约1分钟) ⭐"
+echo "4) 🎯 单步手动演示 (交互式)"
+echo "5) 🔍 仅查看程序信息"
 echo ""
-read -p "请选择 (1-4): " choice
+read -p "请选择 (1-5): " choice
 
 case $choice in
     1)
@@ -80,6 +81,35 @@ case $choice in
         ;;
     3)
         echo ""
+        echo "🏗️ 执行栈分析演示..."
+        echo ""
+        echo "📋 1/4: 分析main函数栈使用"
+        python3 -m elfscope.cli stack test_program main
+        
+        echo ""
+        echo "📋 2/4: 分析递归函数栈消耗"
+        python3 -m elfscope.cli stack test_program fibonacci_recursive
+        
+        echo ""
+        echo "📋 3/4: 分析深度调用链栈使用"
+        python3 -m elfscope.cli stack test_program deep_call_chain_1
+        
+        echo ""
+        echo "📋 4/4: 生成栈使用摘要"
+        python3 -m elfscope.cli stack-summary test_program -o stack_demo_summary.json -t 5
+        
+        echo ""
+        echo "✅ 栈分析演示完成!"
+        echo "📁 生成的文件:"
+        echo "   - stack_demo_summary.json (栈使用摘要)"
+        echo ""
+        echo "🔬 主要发现:"
+        echo "   - main函数是最大栈消耗函数 (~1232字节)"
+        echo "   - 深度调用链通过8级调用达到fibonacci_recursive"
+        echo "   - 递归函数自动检测并估算栈深度"
+        ;;
+    4)
+        echo ""
         echo "🎯 单步演示模式"
         echo "每步执行后按回车继续..."
         
@@ -104,9 +134,18 @@ case $choice in
         python3 -m elfscope.cli function test_program main -o manual_main.json
         
         echo ""
+        echo "步骤5: 栈使用分析 ⭐ 新功能"
+        read -p "按回车执行栈分析..."
+        echo "  分析main函数栈使用:"
+        python3 -m elfscope.cli stack test_program main -o manual_main_stack.json
+        echo ""
+        echo "  生成栈使用摘要:"
+        python3 -m elfscope.cli stack-summary test_program -o manual_stack_summary.json -t 3
+        
+        echo ""
         echo "✅ 单步演示完成!"
         ;;
-    4)
+    5)
         echo ""
         echo "🔍 查看测试程序信息..."
         echo ""

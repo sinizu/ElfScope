@@ -8,6 +8,7 @@
 - **多架构支持**: 支持 x86_64、x86、ARM、AArch64、MIPS、PowerPC、RISC-V 等主流架构
 - **函数调用关系分析**: 自动识别和分析 ELF 文件中的函数调用关系
 - **调用路径查找**: 查找从父函数到子函数的所有可能调用路径
+- **🏗️ 栈使用分析**: 分析函数栈帧大小和调用链栈消耗（含调用路径追踪）⭐ **新功能**
 - **JSON 格式导出**: 将分析结果导出为结构化的 JSON 文件
 
 ### 🛠️ 技术特点
@@ -96,10 +97,26 @@ elfscope complete /path/to/binary -o complete_analysis.json
 elfscope info /path/to/binary
 ```
 
+### 5. 🏗️ 栈使用分析 ⭐ **新功能**
+
+```bash
+# 分析特定函数的栈使用情况
+elfscope stack /path/to/binary main -o stack_analysis.json
+
+# 分析递归函数的栈消耗
+elfscope stack /path/to/binary fibonacci_recursive
+
+# 生成程序的栈使用摘要（显示栈消耗最大的10个函数）
+elfscope stack-summary /path/to/binary -o stack_summary.json -t 10
+
+# 分析深度调用链的栈消耗
+elfscope stack /path/to/binary deep_function
+```
+
 ## Python API 使用
 
 ```python
-from elfscope import ElfParser, CallAnalyzer, PathFinder, JsonExporter
+from elfscope import ElfParser, CallAnalyzer, PathFinder, StackAnalyzer, JsonExporter
 
 # 1. 解析 ELF 文件
 parser = ElfParser('/path/to/binary')
@@ -121,12 +138,29 @@ paths = path_finder.find_paths(
     source_function='source_func'
 )
 
-# 4. 导出结果
+# 4. 栈使用分析 ⭐ 新功能
+stack_analyzer = StackAnalyzer(analyzer)
+
+# 分析特定函数的栈使用
+stack_info = stack_analyzer.get_function_stack_info('main')
+print(f"main函数栈帧: {stack_info['local_stack_frame']} 字节")
+print(f"最大栈消耗: {stack_info['max_total_stack']} 字节")
+print(f"调用路径: {' → '.join(stack_info['max_stack_call_path'])}")
+
+# 生成栈使用摘要
+stack_summary = stack_analyzer.get_stack_summary()
+print(f"最大栈消耗函数: {stack_summary['function_with_max_total_stack']}")
+print(f"最大栈消耗: {stack_summary['max_total_stack_consumption']} 字节")
+
+# 5. 导出结果
 exporter = JsonExporter()
 exporter.export_call_relationships(
     call_analyzer=analyzer,
     output_file='analysis.json'
 )
+
+# 导出栈分析结果
+exporter.export_data(stack_info, 'stack_analysis.json')
 ```
 
 ## 输出格式
@@ -210,6 +244,71 @@ exporter.export_call_relationships(
 }
 ```
 
+### 🏗️ 栈分析输出 ⭐ **新功能**
+
+#### 单个函数栈分析
+
+```json
+{
+  "function": "main",
+  "local_stack_frame": 112,
+  "max_total_stack": 1232,
+  "stack_consumed_by_calls": 1120,
+  "max_stack_call_path": [
+    "main",
+    "data_analysis", 
+    "deep_call_chain_1",
+    "deep_call_chain_2",
+    "fibonacci_recursive",
+    "fibonacci_recursive (递归 x10)"
+  ],
+  "max_stack_path_details": [
+    {
+      "function": "main",
+      "local_stack": 112,
+      "cumulative_stack": 112,
+      "is_external": false,
+      "is_recursive": false
+    },
+    {
+      "function": "fibonacci_recursive (递归 x10)",
+      "local_stack": 480,
+      "cumulative_stack": 1232,
+      "is_recursive": true
+    }
+  ],
+  "architecture": "x86_64"
+}
+```
+
+#### 栈使用摘要
+
+```json
+{
+  "summary": {
+    "architecture": "x86_64",
+    "total_functions_analyzed": 29,
+    "max_total_stack_consumption": 1232,
+    "function_with_max_total_stack": "main",
+    "max_total_stack_call_path": ["main", "main (递归 x10)"],
+    "stack_distribution": {
+      "small": 15,
+      "medium": 9, 
+      "large": 18,
+      "huge": 1
+    }
+  },
+  "heavy_functions": [
+    {
+      "function": "main",
+      "max_total_stack": 1232,
+      "max_stack_call_path": ["main", "main (递归 x10)"],
+      "stack_ratio": 11.0
+    }
+  ]
+}
+```
+
 ## 架构支持
 
 | 架构 | 支持状态 | 说明 |
@@ -264,11 +363,17 @@ ElfScope/
 │   │   ├── elf_parser.py    # ELF文件解析
 │   │   ├── disassembler.py  # 反汇编引擎
 │   │   ├── call_analyzer.py # 调用关系分析
-│   │   └── path_finder.py   # 路径查找
+│   │   ├── path_finder.py   # 路径查找
+│   │   └── stack_analyzer.py# 栈分析器 ⭐ 新增
 │   ├── utils/               # 工具模块
 │   │   └── json_exporter.py # JSON导出
 │   └── cli.py               # 命令行接口
 ├── tests/                   # 测试用例
+├── demo/                    # 演示和文档 ⭐
+│   ├── test_program.c       # 复杂测试程序
+│   ├── run_demo.py         # 自动化演示脚本
+│   ├── quick_start.sh      # 快速启动脚本
+│   └── README.md           # 演示说明文档
 ├── requirements.txt         # 依赖列表
 ├── setup.py                # 安装脚本
 ├── pytest.ini             # pytest配置
@@ -287,6 +392,8 @@ ElfScope/
 - **安全研究**: 识别潜在的安全漏洞和攻击路径
 - **代码审计**: 理解复杂系统的函数调用流程
 - **性能分析**: 识别热点函数和调用瓶颈
+- **🏗️ 栈空间优化**: 分析函数栈消耗，优化嵌入式系统内存使用 ⭐
+- **🏗️ 栈溢出预防**: 识别深度调用链和递归风险点 ⭐
 - **依赖分析**: 分析模块间的依赖关系
 
 ## 许可证

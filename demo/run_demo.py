@@ -8,6 +8,8 @@ ElfScope 演示脚本
 3. 调用路径查找
 4. 函数详细分析
 5. 摘要报告生成
+6. 函数栈使用分析 ⭐ 新功能
+7. 完整分析
 
 使用方法:
     python3 run_demo.py
@@ -87,6 +89,26 @@ def display_json_summary(filepath, title):
             print(f"   📊 函数数: {summary.get('total_functions', 'N/A')}")
             print(f"   📊 调用数: {summary.get('total_calls', 'N/A')}")
             print(f"   📊 复杂度: {data.get('notable_findings', {}).get('complexity', 'N/A')}")
+        
+        # 栈分析结果显示
+        if 'local_stack_frame' in data:
+            # 单个函数栈分析
+            print(f"   🏗️ 函数: {data.get('function', 'N/A')}")
+            print(f"   🏗️ 本地栈帧: {data.get('local_stack_frame', 'N/A')} 字节")
+            print(f"   🏗️ 最大栈消耗: {data.get('max_total_stack', 'N/A')} 字节")
+            path = data.get('max_stack_call_path', [])
+            if path:
+                print(f"   🏗️ 调用路径: {' → '.join(path[:3])}{'...' if len(path) > 3 else ''}")
+        
+        if 'summary' in data and 'max_total_stack_consumption' in data['summary']:
+            # 栈摘要结果
+            summary = data['summary']
+            print(f"   🏗️ 分析函数: {summary.get('total_functions_analyzed', 'N/A')}")
+            print(f"   🏗️ 最大栈消耗: {summary.get('max_total_stack_consumption', 'N/A')} 字节")
+            print(f"   🏗️ 最大栈函数: {summary.get('function_with_max_total_stack', 'N/A')}")
+            heavy_funcs = data.get('heavy_functions', [])
+            if heavy_funcs:
+                print(f"   🏗️ 高栈消耗函数: {len(heavy_funcs)} 个")
         
     except Exception as e:
         print(f"   ❌ 无法读取 {filepath}: {e}")
@@ -236,8 +258,43 @@ def main():
     if summary_file.exists():
         display_json_summary(summary_file, "摘要报告")
     
-    # 步骤7: 完整分析
-    print_step(7, "完整分析 (包含所有信息)")
+    # 步骤7: 栈使用分析 ⭐ 新功能
+    print_step(7, "分析函数栈使用情况 ⭐ 新功能")
+    
+    # 7.1: 分析main函数的栈使用
+    stack_main_file = demo_dir / "demo_stack_main.json"
+    run_command([
+        sys.executable, "-m", "elfscope.cli",
+        "stack", str(demo_dir / "test_program"),
+        "main",
+        "-o", str(stack_main_file)
+    ], "分析main函数的栈使用情况")
+    
+    if stack_main_file.exists():
+        display_json_summary(stack_main_file, "main函数栈分析")
+    
+    # 7.2: 分析深度调用链的栈使用
+    print("   🔍 分析深度调用链栈消耗...")
+    run_command([
+        sys.executable, "-m", "elfscope.cli",
+        "stack", str(demo_dir / "test_program"),
+        "deep_call_chain_1"
+    ], "分析deep_call_chain_1的栈使用情况（不保存到文件）")
+    
+    # 7.3: 生成程序栈使用摘要
+    stack_summary_file = demo_dir / "demo_stack_summary.json"
+    run_command([
+        sys.executable, "-m", "elfscope.cli",
+        "stack-summary", str(demo_dir / "test_program"),
+        "-o", str(stack_summary_file),
+        "-t", "10"
+    ], "生成程序的栈使用摘要（显示栈消耗最大的10个函数）")
+    
+    if stack_summary_file.exists():
+        display_json_summary(stack_summary_file, "栈使用摘要")
+    
+    # 步骤8: 完整分析
+    print_step(8, "完整分析 (包含所有信息)")
     complete_file = demo_dir / "demo_complete.json"
     run_command([
         sys.executable, "-m", "elfscope.cli",
@@ -257,6 +314,8 @@ def main():
         ("demo_utility_paths.json", "utility函数调用路径"),
         ("demo_main_details.json", "main函数详细分析"),
         ("demo_summary.json", "分析摘要报告"),
+        ("demo_stack_main.json", "main函数栈分析 ⭐"),
+        ("demo_stack_summary.json", "程序栈使用摘要 ⭐"),
         ("demo_complete.json", "完整分析报告")
     ]
     

@@ -21,6 +21,8 @@
 - **`demo_utility_paths.json`** - 所有调用utility_function_1的路径
 - **`demo_main_details.json`** - main函数的详细分析
 - **`demo_summary.json`** - 分析摘要报告
+- **`demo_stack_main.json`** - main函数的栈使用分析 ⭐
+- **`demo_stack_summary.json`** - 程序栈使用摘要 ⭐
 - **`demo_complete.json`** - 完整分析报告（包含所有信息）
 
 ## 🚀 快速开始
@@ -41,7 +43,8 @@ python3 run_demo.py
 4. 🛤️ 查找特定调用路径
 5. 🎯 分析特定函数详情
 6. 📊 生成摘要报告
-7. 📑 执行完整分析
+7. 🏗️ 分析函数栈使用情况 ⭐
+8. 📑 执行完整分析
 
 ### 方法2: 手动逐步体验
 
@@ -76,7 +79,22 @@ python3 -m elfscope.cli function test_program main -o main_info.json
 python3 -m elfscope.cli summary test_program -o summary.json
 ```
 
-#### 6. 完整分析
+#### 6. 栈使用分析 ⭐ 新功能
+```bash
+# 分析特定函数的栈使用情况
+python3 -m elfscope.cli stack test_program main -o main_stack.json
+
+# 分析递归函数的栈消耗
+python3 -m elfscope.cli stack test_program fibonacci_recursive
+
+# 分析深度调用链的栈使用
+python3 -m elfscope.cli stack test_program deep_call_chain_1
+
+# 生成程序的栈使用摘要
+python3 -m elfscope.cli stack-summary test_program -o stack_summary.json -t 10
+```
+
+#### 7. 完整分析
 ```bash
 python3 -m elfscope.cli complete test_program -o complete.json
 ```
@@ -104,6 +122,17 @@ python3 -m elfscope.cli complete test_program -o complete.json
 - `deep_call_chain_1-5` - 深度调用链
 - `utility_function_1-3` - 工具函数组
 - `complex_recursive_chain` - 复杂递归链
+
+### 🏗️ 栈使用分析结果 ⭐
+- **最大栈消耗函数**: main函数（1232字节）
+- **栈消耗分布**:
+  - 小栈消耗 (<64B): 15个函数
+  - 中等栈消耗 (64-256B): 9个函数
+  - 大栈消耗 (256-1KB): 18个函数
+  - 巨大栈消耗 (>1KB): 1个函数
+- **最大栈消耗路径**: main → main (递归 x10)
+- **深度调用链栈消耗**: deep_call_chain_1 (688B) 通过8级调用达到fibonacci_recursive
+- **递归函数栈估算**: fibonacci_recursive最大消耗528字节（含递归深度）
 
 ## 🔧 测试程序特性
 
