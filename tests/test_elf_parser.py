@@ -78,15 +78,27 @@ class TestElfParser:
             }[key]
         })()
         
-        # 模拟符号表节区
-        mock_symtab = type('MockSymbolTableSection', (), {
-            'iter_symbols': lambda: [mock_symbol]
-        })()
+        # 使用Mock对象模拟符号表节区
+        from unittest.mock import MagicMock
+        from elftools.elf.sections import SymbolTableSection
+        
+        mock_symtab = MagicMock(spec=SymbolTableSection)
+        mock_symtab.name = '.symtab'
+        mock_symtab.iter_symbols.return_value = [mock_symbol]
+        mock_symtab.__getitem__.side_effect = lambda key: {
+            'sh_type': 'SHT_SYMTAB',
+            'sh_flags': 0,
+            'sh_addr': 0,
+            'sh_offset': 0x1000,
+            'sh_size': 1000,
+            'sh_addralign': 8,
+            'sh_entsize': 24
+        }[key]
         
         # 模拟 ELF 文件对象
         mock_elf = type('MockELFFile', (), {
             'header': mock_header,
-            'iter_sections': lambda: [mock_symtab]
+            'iter_sections': lambda self: [mock_symtab]
         })()
         
         mock_elffile.return_value = mock_elf
@@ -167,10 +179,22 @@ class TestElfParser:
             }[key]
         })()
         
-        # 模拟符号表节区
-        mock_symtab = type('MockSymbolTableSection', (), {
-            'iter_symbols': lambda: [mock_symbol]
-        })()
+        # 使用Mock对象模拟符号表节区
+        from unittest.mock import MagicMock
+        from elftools.elf.sections import SymbolTableSection
+        
+        mock_symtab = MagicMock(spec=SymbolTableSection)
+        mock_symtab.name = '.symtab'
+        mock_symtab.iter_symbols.return_value = [mock_symbol]
+        mock_symtab.__getitem__.side_effect = lambda key: {
+            'sh_type': 'SHT_SYMTAB',
+            'sh_flags': 0,
+            'sh_addr': 0,
+            'sh_offset': 0x1000,
+            'sh_size': 1000,
+            'sh_addralign': 8,
+            'sh_entsize': 24
+        }[key]
         
         # 模拟代码段
         mock_text_section = type('MockSection', (), {
@@ -183,14 +207,15 @@ class TestElfParser:
                 'sh_size': 0x1000,
                 'sh_addralign': 16,
                 'sh_entsize': 0
-            }[key]
+            }[key],
+            'data': lambda self: b'\x90' * 0x1000  # NOP 指令
         })()
         
         # 模拟 ELF 文件对象
         mock_elf = type('MockELFFile', (), {
             'header': mock_header,
-            'iter_sections': lambda: [mock_symtab, mock_text_section],
-            'get_section_by_name': lambda name: mock_text_section if name == '.text' else None
+            'iter_sections': lambda self: [mock_symtab, mock_text_section],
+            'get_section_by_name': lambda self, name: mock_text_section if name == '.text' else None
         })()
         
         mock_elffile.return_value = mock_elf

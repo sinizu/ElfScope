@@ -85,8 +85,8 @@ class JsonExporter:
     def export_call_paths(self, 
                          path_finder: PathFinder,
                          target_function: str,
-                         source_function: Optional[str] = None,
                          output_file: str,
+                         source_function: Optional[str] = None,
                          max_depth: int = 10,
                          include_cycles: bool = False) -> bool:
         """
@@ -362,10 +362,10 @@ class JsonExporter:
         Returns:
             复杂性评估结果
         """
-        total_functions = statistics['total_functions']
-        total_calls = statistics['total_calls']
-        avg_calls = statistics['average_calls_per_function']
-        cycles = statistics['cycles']
+        total_functions = statistics.get('total_functions', 0)
+        total_calls = statistics.get('total_calls', 0)
+        avg_calls = statistics.get('average_calls_per_function', 0.0)
+        cycles = statistics.get('cycles', 0)
         
         if total_functions < 10:
             return 'simple'

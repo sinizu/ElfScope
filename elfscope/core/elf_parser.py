@@ -49,9 +49,10 @@ class ElfParser:
         self.filepath = filepath
         self._validate_file()
         
-        with open(filepath, 'rb') as f:
-            self.elffile = ELFFile(f)
-            self._parse_basic_info()
+        # 保持文件句柄打开
+        self._file_handle = open(filepath, 'rb')
+        self.elffile = ELFFile(self._file_handle)
+        self._parse_basic_info()
     
     def _validate_file(self) -> None:
         """验证文件是否存在且可读"""
@@ -261,3 +262,13 @@ class ElfParser:
             'num_functions': len(self.function_symbols),
             'text_sections': len(self.text_sections)
         }
+    
+    def close(self):
+        """关闭文件句柄"""
+        if hasattr(self, '_file_handle') and self._file_handle:
+            self._file_handle.close()
+            self._file_handle = None
+    
+    def __del__(self):
+        """析构时清理资源"""
+        self.close()

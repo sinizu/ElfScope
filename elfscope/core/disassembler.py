@@ -305,4 +305,5 @@ class Disassembler:
     def __del__(self):
         """清理资源"""
         if hasattr(self, 'cs'):
-            self.cs.close()
+            # Capstone 对象不需要显式关闭
+            pass
