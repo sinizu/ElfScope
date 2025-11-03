@@ -143,6 +143,12 @@ class CallAnalyzer:
                     if target_func:
                         target_name = target_func['name']
                         
+                        # 对于跳转指令，如果是函数内跳转（目标地址在同一函数内），跳过记录
+                        # 只有跨函数的跳转（真正的尾调用）才应该被记录
+                        if call['type'] == 'jump' and target_name == func_name:
+                            # 这是函数内跳转，不是调用关系
+                            continue
+                        
                         # 记录调用关系
                         call_info = {
                             'from_function': func_name,
