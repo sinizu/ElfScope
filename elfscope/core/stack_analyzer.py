@@ -296,8 +296,13 @@ class StackAnalyzer:
             total_stack = local_stack + max_callee_stack
             
             # 构建完整的调用路径
+            # max_callee_path 是从被调用函数开始的完整路径（包含被调用函数本身）
+            # 例如：如果 puts 调用 __free，__free 返回的路径是 ['__free', '_int_free', ...]
+            # 那么 puts 的路径应该是 [current_path, 'puts'] + ['__free', '_int_free', ...]
+            # 即：current_path + ['puts'] + max_callee_path
             if max_callee_path:
-                full_path = current_path + [func_name] + max_callee_path[len(current_path) + 1:]
+                # max_callee_path 已经包含被调用函数，直接拼接即可
+                full_path = current_path + [func_name] + max_callee_path
             else:
                 full_path = current_path + [func_name]
             
