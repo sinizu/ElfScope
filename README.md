@@ -23,13 +23,100 @@
 - Python 3.8 或更高版本
 - Linux 操作系统（推荐）
 
-### 安装依赖
+### 安装步骤
+
+#### 1. 克隆仓库
 ```bash
-pip install -r requirements.txt
+git clone <repository-url>
+cd ElfScope
 ```
 
-### 开发安装
+#### 2. 安装方式
+
+**方式一：使用 uv 安装（推荐，速度更快）** ⚡
+
+[uv](https://github.com/astral-sh/uv) 是一个极快的 Python 包管理器，安装和构建速度比传统 pip 快 10-100 倍：
+
 ```bash
+# 首先安装 uv（如果尚未安装）
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 开发安装（推荐）- 会自动安装 requirements.txt 中的依赖
+uv pip install -e .
+
+# 或者普通安装
+uv pip install .
+
+# 使用 uv 创建和管理虚拟环境（可选，但推荐）
+uv venv                    # 创建虚拟环境
+source .venv/bin/activate  # 激活虚拟环境（Linux/Mac）
+# 或 .venv\Scripts\activate  # Windows
+uv pip install -e .        # 在虚拟环境中安装
+```
+
+**方式二：使用 pip 开发安装**
+
+开发安装方式会将包以可编辑模式安装，代码修改后无需重新安装即可生效：
+```bash
+# 安装依赖和包（会自动安装 requirements.txt 中的依赖）
+pip install -e .
+
+# 或者分步安装
+pip install -r requirements.txt
+pip install -e .
+```
+
+**方式三：使用 pip 普通安装**
+
+普通安装方式将包安装到系统 Python 环境中：
+```bash
+# 安装依赖
+pip install -r requirements.txt
+
+# 安装包
+pip install .
+```
+
+#### 3. 验证安装
+
+安装完成后，可以通过以下命令验证是否安装成功：
+```bash
+elfscope --version
+# 或者
+elfscope info --help
+```
+
+#### 4. 使用虚拟环境（可选但推荐）
+
+建议使用虚拟环境来隔离项目依赖：
+
+**使用 uv 创建虚拟环境（推荐）**：
+```bash
+# 创建虚拟环境（uv 比传统方式快很多）
+uv venv
+
+# 激活虚拟环境（Linux/Mac）
+source .venv/bin/activate
+
+# 激活虚拟环境（Windows）
+.venv\Scripts\activate
+
+# 然后在虚拟环境中安装
+uv pip install -e .
+```
+
+**使用传统方式创建虚拟环境**：
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+
+# 激活虚拟环境（Linux/Mac）
+source venv/bin/activate
+
+# 激活虚拟环境（Windows）
+venv\Scripts\activate
+
+# 然后在虚拟环境中安装
 pip install -e .
 ```
 
