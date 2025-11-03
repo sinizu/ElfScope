@@ -7,5 +7,6 @@ from .disassembler import Disassembler
 from .call_analyzer import CallAnalyzer
 from .path_finder import PathFinder
 from .stack_analyzer import StackAnalyzer
+from .objdump import ObjdumpAnalyzer
 
-__all__ = ['ElfParser', 'Disassembler', 'CallAnalyzer', 'PathFinder', 'StackAnalyzer']
+__all__ = ['ElfParser', 'Disassembler', 'CallAnalyzer', 'PathFinder', 'StackAnalyzer', 'ObjdumpAnalyzer']

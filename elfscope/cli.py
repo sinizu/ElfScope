@@ -19,6 +19,7 @@ from .core.elf_parser import ElfParser
 from .core.call_analyzer import CallAnalyzer
 from .core.path_finder import PathFinder
 from .core.stack_analyzer import StackAnalyzer
+from .core.objdump import ObjdumpAnalyzer
 from .utils.json_exporter import JsonExporter
 
 
@@ -534,6 +535,196 @@ def info(elf_file: str):
         
     except Exception as e:
         click.echo(f"✗ 获取 ELF 信息失败: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument('elf_file', type=click.Path(exists=True, readable=True))
+@click.option('--disassemble', '-d', is_flag=True, help='反汇编代码段')
+@click.option('--disassemble-all', is_flag=True, help='反汇编所有代码段')
+@click.option('--function', '-f', help='反汇编指定函数')
+@click.option('--syms', '-t', is_flag=True, help='显示符号表')
+@click.option('--headers', '-h', is_flag=True, help='显示节区头')
+@click.option('--full-contents', '-s', is_flag=True, help='显示完整节区内容')
+@click.option('--section', help='指定节区名称')
+@click.option('--reloc', '-r', is_flag=True, help='显示重定位信息')
+@click.option('--output', '-o', help='JSON 输出文件路径（可选）')
+@click.option('--start-addr', help='起始地址（十六进制，如 0x401000）')
+@click.option('--stop-addr', help='结束地址（十六进制，如 0x401100）')
+def objdump(elf_file: str, disassemble: bool, disassemble_all: bool, 
+           function: Optional[str], syms: bool, headers: bool, 
+           full_contents: bool, section: Optional[str], reloc: bool,
+           output: Optional[str], start_addr: Optional[str], 
+           stop_addr: Optional[str]):
+    """
+    显示 ELF 文件信息（类似 GNU objdump）
+    
+    \b
+    示例:
+        # 反汇编所有代码段
+        elfscope objdump /path/to/binary -d
+        
+        # 反汇编指定函数
+        elfscope objdump /path/to/binary -d -f main
+        
+        # 显示符号表
+        elfscope objdump /path/to/binary -t
+        
+        # 显示节区头
+        elfscope objdump /path/to/binary -h
+        
+        # 显示完整节区内容
+        elfscope objdump /path/to/binary -s --section .text
+        
+        # 显示重定位信息
+        elfscope objdump /path/to/binary -r
+        
+        # 反汇编指定地址范围
+        elfscope objdump /path/to/binary -d --start-addr 0x401000 --stop-addr 0x401100
+    """
+    try:
+        # 如果没有指定任何选项，显示帮助信息
+        if not any([disassemble, disassemble_all, function, syms, headers, 
+                   full_contents, reloc, start_addr]):
+            click.echo("请至少指定一个选项（-d, -t, -h, -s, -r 等）")
+            click.echo("使用 --help 查看完整帮助信息")
+            sys.exit(1)
+        
+        # 初始化解析器和分析器
+        elf_parser = ElfParser(elf_file)
+        objdump_analyzer = ObjdumpAnalyzer(elf_parser)
+        
+        output_data = {}
+        
+        # 处理反汇编
+        if disassemble or disassemble_all or function or start_addr:
+            if function:
+                # 反汇编指定函数
+                click.echo(f"正在反汇编函数: {function}")
+                result = objdump_analyzer.disassemble_function(function)
+                output_text = objdump_analyzer.format_disassembly(result, 'text')
+                click.echo(output_text)
+                output_data['disassembly'] = result
+            elif start_addr:
+                # 反汇编地址范围
+                start = int(start_addr, 16) if isinstance(start_addr, str) else start_addr
+                stop = int(stop_addr, 16) if stop_addr and isinstance(stop_addr, str) else None
+                click.echo(f"正在反汇编地址范围: {start_addr} - {stop_addr or 'end'}")
+                result = objdump_analyzer.disassemble_section(
+                    start_address=start,
+                    end_address=stop
+                )
+                output_text = objdump_analyzer.format_disassembly(result, 'text')
+                click.echo(output_text)
+                output_data['disassembly'] = result
+            else:
+                # 反汇编代码段
+                click.echo("正在反汇编代码段...")
+                result = objdump_analyzer.disassemble_section(
+                    section_name=section if not disassemble_all else None
+                )
+                output_text = objdump_analyzer.format_disassembly(result, 'text')
+                click.echo(output_text)
+                output_data['disassembly'] = result
+        
+        # 处理符号表
+        if syms:
+            click.echo("\n符号表:")
+            click.echo("=" * 80)
+            result = objdump_analyzer.show_symbols()
+            
+            # 格式化输出
+            click.echo(f"{'地址':<18} {'大小':<10} {'类型':<12} {'绑定':<10} {'名称'}")
+            click.echo("-" * 80)
+            
+            for symbol in result['symbols']:
+                addr = symbol['value']
+                size = symbol['size']
+                sym_type = symbol['type']
+                bind = symbol['bind']
+                name = symbol['name']
+                click.echo(f"{addr:<18} {size:<10} {sym_type:<12} {bind:<10} {name}")
+            
+            click.echo(f"\n总计: {result['total_count']} 个符号")
+            output_data['symbols'] = result
+        
+        # 处理节区头
+        if headers:
+            click.echo("\n节区头:")
+            click.echo("=" * 100)
+            result = objdump_analyzer.show_headers()
+            
+            # 格式化输出
+            click.echo(f"{'节区名称':<20} {'地址':<18} {'偏移':<12} {'大小':<12} {'标志':<8} {'对齐'}")
+            click.echo("-" * 100)
+            
+            for sec in result['sections']:
+                name = sec['name'][:18]  # 限制名称长度
+                addr = sec['address']
+                offset = sec['offset']
+                size = sec['size']
+                flags = sec['flags']
+                align = sec['alignment']
+                click.echo(f"{name:<20} {addr:<18} {offset:<12} {size:<12} {flags:<8} {align}")
+            
+            click.echo(f"\n总计: {result['total_count']} 个节区")
+            output_data['headers'] = result
+        
+        # 处理完整内容
+        if full_contents:
+            click.echo("\n节区完整内容:")
+            click.echo("=" * 100)
+            result = objdump_analyzer.show_full_contents(section_name=section)
+            
+            for sec in result['sections']:
+                click.echo(f"\n节区 {sec['name']} (地址: {sec['address']}, 大小: {sec['size']} 字节):")
+                click.echo("-" * 100)
+                
+                for line in sec['lines']:
+                    click.echo(f" {line['address']}  {line['hex']}  |{line['ascii']}|")
+            
+            output_data['full_contents'] = result
+        
+        # 处理重定位信息
+        if reloc:
+            click.echo("\n重定位信息:")
+            click.echo("=" * 80)
+            result = objdump_analyzer.show_relocations(section_name=section)
+            
+            for reloc_sec in result['relocations']:
+                click.echo(f"\n节区 {reloc_sec['section']}:")
+                click.echo(f"{'偏移':<18} {'类型':<15} {'符号':<30} {'符号值'}")
+                click.echo("-" * 80)
+                
+                for reloc in reloc_sec['relocations']:
+                    offset = reloc['offset']
+                    reloc_type = str(reloc['type'])
+                    symbol = reloc.get('symbol', '')
+                    sym_value = reloc.get('symbol_value', '')
+                    click.echo(f"{offset:<18} {reloc_type:<15} {symbol:<30} {sym_value}")
+            
+            output_data['relocations'] = result
+        
+        # 输出JSON（如果指定）
+        if output:
+            exporter = JsonExporter()
+            success = exporter.export_data(output_data, output)
+            if success:
+                click.echo(f"\n✓ 结果已保存到: {output}")
+            else:
+                click.echo(f"\n✗ 保存失败", err=True)
+        
+        # 清理资源
+        elf_parser.close()
+        
+    except ValueError as e:
+        click.echo(f"✗ 参数错误: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ objdump 失败: {e}", err=True)
+        import traceback
+        if logging.getLogger().level == logging.DEBUG:
+            traceback.print_exc()
         sys.exit(1)
 
 

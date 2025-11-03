@@ -11,6 +11,7 @@ from .core.elf_parser import ElfParser
 from .core.call_analyzer import CallAnalyzer
 from .core.path_finder import PathFinder
 from .core.stack_analyzer import StackAnalyzer
+from .core.objdump import ObjdumpAnalyzer
 from .utils.json_exporter import JsonExporter
 
-__all__ = ['ElfParser', 'CallAnalyzer', 'PathFinder', 'StackAnalyzer', 'JsonExporter']
+__all__ = ['ElfParser', 'CallAnalyzer', 'PathFinder', 'StackAnalyzer', 'ObjdumpAnalyzer', 'JsonExporter']
