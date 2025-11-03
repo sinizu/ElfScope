@@ -11,6 +11,7 @@ from typing import Dict, List, Set, Optional, Tuple, Any
 import logging
 from collections import defaultdict
 import networkx as nx
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from .elf_parser import ElfParser
 from .disassembler import Disassembler, DisassemblerError
@@ -293,9 +294,12 @@ class CallAnalyzer:
         
         return self.call_graph.has_edge(function_name, function_name)
     
-    def find_cycles(self) -> List[List[str]]:
+    def find_cycles(self, timeout: int = 10) -> List[List[str]]:
         """
         查找调用图中的环（相互递归调用）
+        
+        Args:
+            timeout: 超时时间（秒），默认10秒。对于大型图，如果超时将返回空列表
         
         Returns:
             环的列表，每个环是函数名列表
@@ -303,9 +307,34 @@ class CallAnalyzer:
         if not self.analyzed:
             self.analyze()
         
+        # 对于非常大的图，直接跳过循环查找以避免阻塞
+        num_nodes = len(self.call_graph.nodes)
+        num_edges = len(self.call_graph.edges)
+        
+        # 如果图太大，直接返回空列表（可选：只查找直接递归）
+        if num_nodes > 500 or num_edges > 5000:
+            logging.info(f"图规模较大（{num_nodes} 节点，{num_edges} 边），跳过完整循环查找以避免超时")
+            # 只查找直接递归（自环）
+            self_loops = []
+            for node in self.call_graph.nodes():
+                if self.call_graph.has_edge(node, node):
+                    self_loops.append([node])
+            return self_loops
+        
         try:
-            cycles = list(nx.simple_cycles(self.call_graph))
-            return cycles
+            # 使用线程池实现超时
+            def _find_cycles():
+                return list(nx.simple_cycles(self.call_graph))
+            
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_find_cycles)
+                try:
+                    cycles = future.result(timeout=timeout)
+                    return cycles
+                except FutureTimeoutError:
+                    logging.warning(f"查找循环超时（{timeout}秒），图规模: {num_nodes} 节点，{num_edges} 边。跳过循环查找。")
+                    future.cancel()
+                    return []
         except Exception as e:
             logging.warning(f"查找环时出错: {e}")
             return []
@@ -346,6 +375,14 @@ class CallAnalyzer:
         if not self.analyzed:
             self.analyze()
         
+        # 尝试查找循环，但如果失败或超时不影响其他统计信息
+        try:
+            cycles = self.find_cycles()
+            cycles_count = len(cycles)
+        except Exception as e:
+            logging.warning(f"获取循环统计时出错: {e}")
+            cycles_count = -1  # -1 表示未计算或计算失败
+        
         stats = {
             'total_functions': len(self.call_graph.nodes),
             'total_calls': len(self.call_graph.edges),
@@ -354,7 +391,7 @@ class CallAnalyzer:
             'max_calls_to_function': 0,
             'recursive_functions': 0,
             'external_functions': 0,
-            'cycles': len(self.find_cycles())
+            'cycles': cycles_count
         }
         
         if stats['total_functions'] > 0:
