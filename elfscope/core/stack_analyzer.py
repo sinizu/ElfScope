@@ -367,11 +367,27 @@ class StackAnalyzer:
                         func_idx = cached_full_path.index(func_name)
                         cached_path = cached_full_path[func_idx:]
                     else:
-                        # 如果函数不在缓存路径中，只返回函数本身
-                        cached_path = [func_name]
+                        # 如果函数不在缓存路径中，说明缓存路径有问题
+                        # 清除缓存并重新计算（临时移除 visited 标记以避免无限递归）
+                        visited.discard(func_name)
+                        calculating.discard(func_name)
+                        # 清除不正确的缓存
+                        if func_name in self.function_max_stack_paths:
+                            del self.function_max_stack_paths[func_name]
+                        if func_name in self.function_max_stack:
+                            del self.function_max_stack[func_name]
+                        # 重新计算
+                        cached_stack, cached_path = calculate_max_stack_with_path(
+                            func_name, []  # 使用空路径重新计算
+                        )
                 else:
-                    # 如果缓存路径为空，只返回函数本身
-                    cached_path = [func_name]
+                    # 如果缓存路径为空，清除缓存并重新计算
+                    visited.discard(func_name)
+                    calculating.discard(func_name)
+                    # 重新计算
+                    cached_stack, cached_path = calculate_max_stack_with_path(
+                        func_name, []  # 使用空路径重新计算
+                    )
                 
                 return self.function_max_stack.get(func_name, 0), cached_path
             
