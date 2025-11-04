@@ -260,15 +260,76 @@ class StackAnalyzer:
             if current_path is None:
                 current_path = []
             
+            # 检测循环调用：如果当前函数已经在路径中，说明形成了循环
+            if func_name in current_path:
+                # 找到循环的起点
+                cycle_start_idx = current_path.index(func_name)
+                cycle_path = current_path[cycle_start_idx:] + [func_name]
+                
+                # 计算循环中所有函数的栈消耗总和
+                cycle_stack = 0
+                for func in cycle_path[:-1]:  # 不包括最后一个重复的函数
+                    func_stack = self.function_stack_frames.get(func, 0)
+                    if func not in self.function_stack_frames:
+                        func_stack = self.EXTERNAL_FUNC_STACK_ESTIMATES.get(func, 32)
+                    cycle_stack += func_stack
+                
+                # 估算递归深度为10层
+                recursive_stack = cycle_stack * 10
+                
+                # 构建循环标记：只返回循环标记，不包含路径前缀
+                # 因为 func_name 已经在 current_path 中，上层函数会正确拼接
+                cycle_funcs = ' → '.join(cycle_path[:-1])
+                recursive_path = [f"[循环: {cycle_funcs}] (递归 x10)"]
+                
+                return recursive_stack, recursive_path
+            
+            # 检测直接递归（函数调用自己）
             if func_name in calculating:
                 # 检测到递归调用，返回一个估算值
                 base_stack = self.function_stack_frames.get(func_name, 0)
+                if func_name not in self.function_stack_frames:
+                    base_stack = self.EXTERNAL_FUNC_STACK_ESTIMATES.get(func_name, 32)
                 recursive_stack = base_stack * 10  # 递归深度估算为10层
-                recursive_path = current_path + [f"{func_name} (递归 x10)"]
+                # 只返回递归标记，不包含 current_path
+                recursive_path = [f"{func_name} (递归 x10)"]
                 return recursive_stack, recursive_path
             
             if func_name in visited:
-                return self.function_max_stack.get(func_name, 0), self.function_max_stack_paths.get(func_name, [])
+                # 如果函数已经计算过，检查是否会形成循环
+                if func_name in current_path:
+                    # 如果在当前路径中已经存在，说明形成了循环
+                    # 找到循环的起点
+                    cycle_start_idx = current_path.index(func_name)
+                    cycle_path = current_path[cycle_start_idx:] + [func_name]
+                    
+                    # 计算循环中所有函数的栈消耗总和
+                    cycle_stack = 0
+                    for func in cycle_path[:-1]:
+                        func_stack = self.function_stack_frames.get(func, 0)
+                        if func not in self.function_stack_frames:
+                            func_stack = self.EXTERNAL_FUNC_STACK_ESTIMATES.get(func, 32)
+                        cycle_stack += func_stack
+                    
+                    recursive_stack = cycle_stack * 10
+                    cycle_funcs = ' → '.join(cycle_path[:-1])
+                    recursive_path = [f"[循环: {cycle_funcs}] (递归 x10)"]
+                    return recursive_stack, recursive_path
+                
+                # 如果不会形成循环，返回缓存的结果
+                # 注意：缓存路径包含完整路径，但我们需要返回从函数开始的路径
+                cached_full_path = self.function_max_stack_paths.get(func_name, [])
+                if cached_full_path:
+                    # 从缓存路径中提取从函数开始的路径
+                    # 找到函数在路径中的位置
+                    if func_name in cached_full_path:
+                        func_idx = cached_full_path.index(func_name)
+                        cached_path = cached_full_path[func_idx:]
+                    else:
+                        cached_path = [func_name]
+                else:
+                    cached_path = [func_name]
+                return self.function_max_stack.get(func_name, 0), cached_path
             
             calculating.add(func_name)
             
@@ -285,8 +346,11 @@ class StackAnalyzer:
             # 检查所有被调用的函数
             if func_name in call_graph:
                 for callee in call_graph.successors(func_name):
+                    # 构建新的路径，包含当前函数
+                    new_path = current_path + [func_name]
+                    
                     callee_stack, callee_path = calculate_max_stack_with_path(
-                        callee, current_path + [func_name]
+                        callee, new_path
                     )
                     
                     if callee_stack > max_callee_stack:
@@ -295,23 +359,34 @@ class StackAnalyzer:
             
             total_stack = local_stack + max_callee_stack
             
-            # 构建完整的调用路径
-            # max_callee_path 是从被调用函数开始的完整路径（包含被调用函数本身）
+            # 构建从当前函数开始的调用路径（不包含 current_path）
+            # max_callee_path 是从被调用函数开始的路径（不包含 current_path）
             # 例如：如果 puts 调用 __free，__free 返回的路径是 ['__free', '_int_free', ...]
-            # 那么 puts 的路径应该是 [current_path, 'puts'] + ['__free', '_int_free', ...]
-            # 即：current_path + ['puts'] + max_callee_path
+            # 那么 puts 返回的路径应该是 ['puts'] + ['__free', '_int_free', ...]
+            # 注意：返回的路径只包含从当前函数开始的调用链，调用者会自己拼接完整路径
             if max_callee_path:
-                # max_callee_path 已经包含被调用函数，直接拼接即可
-                full_path = current_path + [func_name] + max_callee_path
+                # 检查 max_callee_path 是否以循环标记开始
+                if max_callee_path and max_callee_path[0].startswith("[循环:"):
+                    # 如果被调用函数检测到循环，说明 func_name 已经在 current_path 中
+                    # 此时只返回循环标记，不包含 func_name
+                    return_path = max_callee_path
+                else:
+                    # max_callee_path 已经包含被调用函数，直接拼接即可
+                    # 返回的路径从当前函数开始：['func_name'] + max_callee_path
+                    return_path = [func_name] + max_callee_path
             else:
-                full_path = current_path + [func_name]
+                # 如果没有调用其他函数，只返回当前函数
+                return_path = [func_name]
             
+            # 保存完整路径（用于缓存，包含 current_path）
+            full_path = current_path + return_path
             self.function_max_stack[func_name] = total_stack
             self.function_max_stack_paths[func_name] = full_path
             calculating.remove(func_name)
             visited.add(func_name)
             
-            return total_stack, full_path
+            # 返回从当前函数开始的路径（不包含 current_path）
+            return total_stack, return_path
         
         # 计算所有函数的栈消耗和路径
         for func_name in call_graph.nodes():
@@ -364,17 +439,46 @@ class StackAnalyzer:
         
         for i, func in enumerate(max_stack_path):
             if func.endswith("(递归 x10)"):
-                # 处理递归函数
-                base_func = func.replace(" (递归 x10)", "")
-                func_local_stack = self.function_stack_frames.get(base_func, 0)
-                recursive_stack = func_local_stack * 10
-                current_total += recursive_stack
-                path_details.append({
-                    'function': func,
-                    'local_stack': recursive_stack,
-                    'cumulative_stack': current_total,
-                    'is_recursive': True
-                })
+                # 处理递归或循环调用
+                if func.startswith("[循环:"):
+                    # 处理循环调用标记：提取循环中的函数列表
+                    # 格式: [循环: func1 → func2 → ...] (递归 x10)
+                    cycle_match = func.split("[循环:")[1].split("]")[0]
+                    cycle_funcs = [f.strip() for f in cycle_match.split("→")]
+                    
+                    # 计算循环中所有函数的栈消耗总和
+                    cycle_stack = 0
+                    for cycle_func in cycle_funcs:
+                        func_stack = self.function_stack_frames.get(cycle_func, 0)
+                        if cycle_func not in self.function_stack_frames:
+                            func_stack = self.EXTERNAL_FUNC_STACK_ESTIMATES.get(cycle_func, 32)
+                        cycle_stack += func_stack
+                    
+                    recursive_stack = cycle_stack * 10
+                    current_total += recursive_stack
+                    path_details.append({
+                        'function': func,
+                        'local_stack': recursive_stack,
+                        'cumulative_stack': current_total,
+                        'is_recursive': True,
+                        'is_cycle': True,
+                        'cycle_functions': cycle_funcs
+                    })
+                else:
+                    # 处理直接递归函数
+                    base_func = func.replace(" (递归 x10)", "")
+                    func_local_stack = self.function_stack_frames.get(base_func, 0)
+                    if base_func not in self.function_stack_frames:
+                        func_local_stack = self.EXTERNAL_FUNC_STACK_ESTIMATES.get(base_func, 32)
+                    recursive_stack = func_local_stack * 10
+                    current_total += recursive_stack
+                    path_details.append({
+                        'function': func,
+                        'local_stack': recursive_stack,
+                        'cumulative_stack': current_total,
+                        'is_recursive': True,
+                        'is_cycle': False
+                    })
             else:
                 func_local_stack = self.function_stack_frames.get(func, 0)
                 if func not in self.function_stack_frames:
