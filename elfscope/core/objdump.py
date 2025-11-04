@@ -605,13 +605,10 @@ class ObjdumpAnalyzer:
                     # 指令字符串
                     instruction_str = f"{insn['mnemonic']:8s} {insn['op_str']}"
                     
-                    # 如果有调用目标名称
+                    # 如果有调用目标名称，在地址后面添加函数名注释
                     if 'call_target_name' in insn:
-                        call_target_str = self._format_address(insn['call_target'])
-                        instruction_str = instruction_str.replace(
-                            call_target_str, 
-                            f"<{insn['call_target_name']}>"
-                        )
+                        # 在指令字符串末尾添加函数名注释
+                        instruction_str = f"{instruction_str} <{insn['call_target_name']}>"
                     
                     line = f"  {addr_str}: {bytes_formatted:24s} {instruction_str}"
                     lines.append(line)
@@ -630,12 +627,9 @@ class ObjdumpAnalyzer:
                 
                 instruction_str = f"{insn['mnemonic']:8s} {insn['op_str']}"
                 
+                # 如果有调用目标名称，在地址后面添加函数名注释
                 if 'call_target_name' in insn:
-                    call_target_str = self._format_address(insn['call_target'])
-                    instruction_str = instruction_str.replace(
-                        call_target_str, 
-                        f"<{insn['call_target_name']}>"
-                    )
+                    instruction_str = f"{instruction_str} <{insn['call_target_name']}>"
                 
                 line = f"  {addr_str}: {bytes_formatted:24s} {instruction_str}"
                 lines.append(line)
@@ -655,12 +649,9 @@ class ObjdumpAnalyzer:
                 
                 instruction_str = f"{insn['mnemonic']:8s} {insn['op_str']}"
                 
+                # 如果有调用目标名称，在地址后面添加函数名注释
                 if 'call_target_name' in insn:
-                    call_target_str = self._format_address(insn['call_target'])
-                    instruction_str = instruction_str.replace(
-                        call_target_str, 
-                        f"<{insn['call_target_name']}>"
-                    )
+                    instruction_str = f"{instruction_str} <{insn['call_target_name']}>"
                 
                 line = f"  {addr_str}: {bytes_formatted:24s} {instruction_str}"
                 lines.append(line)
