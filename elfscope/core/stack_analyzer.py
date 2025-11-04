@@ -182,7 +182,7 @@ class StackAnalyzer:
                                      section_data: bytes, 
                                      section_base: int) -> int:
         """
-        分析单个函数的栈帧大小
+        分析单个函数的栈帧大小（支持循环分配栈）
         
         Args:
             function: 函数信息
@@ -211,31 +211,60 @@ class StackAnalyzer:
         disassembler = self.call_analyzer.disassembler
         instructions = disassembler.disassemble_function(func_data, func_addr, func_size)
         
-        # 分析栈操作指令
+        if not instructions:
+            return 0
+        
+        # 分析整个函数的栈分配（不仅限于序言）
+        return self._analyze_stack_allocation(instructions, func_name)
+    
+    def _analyze_stack_allocation(self, instructions: List[Dict[str, Any]], func_name: str) -> int:
+        """
+        分析栈分配，支持循环分配栈的情况
+        
+        Args:
+            instructions: 指令列表
+            func_name: 函数名（用于日志）
+            
+        Returns:
+            总栈分配大小（字节）
+        """
         stack_size = 0
         push_count = 0
         
-        # 只分析函数开头的几条指令（函数序言）
-        prologue_instructions = instructions[:min(20, len(instructions))]
+        # 构建地址到指令的映射
+        addr_to_insn = {}
+        for insn in instructions:
+            addr_to_insn[insn['address']] = insn
         
-        for insn in prologue_instructions:
-            mnemonic = insn['mnemonic'].lower()
-            op_str = insn['op_str'].lower()
+        # 检测循环分配栈的模式
+        # 模式：lea -offset(%rsp),reg 后跟循环内的 sub $size,%rsp
+        loop_stack_allocation = self._detect_loop_stack_allocation(instructions, addr_to_insn, func_name)
+        
+        if loop_stack_allocation > 0:
+            stack_size = max(stack_size, loop_stack_allocation)
+        else:
+            # 如果没有检测到循环分配，使用传统方法分析
+            # 分析前100条指令（扩大范围以覆盖更多情况）
+            analysis_limit = min(100, len(instructions))
             
-            # 检查栈分配指令
-            for pattern in self.arch_info['stack_alloc_patterns']:
-                match = re.search(pattern, f"{mnemonic} {op_str}", re.IGNORECASE)
-                if match:
-                    try:
-                        # 提取分配的字节数
-                        alloc_size = int(match.group(1), 16 if 'x' in match.group(1).lower() else 10)
-                        stack_size = max(stack_size, alloc_size)
-                    except (ValueError, IndexError):
-                        continue
-            
-            # 统计push指令
-            if mnemonic == 'push':
-                push_count += 1
+            for insn in instructions[:analysis_limit]:
+                mnemonic = insn['mnemonic'].lower()
+                op_str = insn['op_str'].lower()
+                
+                # 检查栈分配指令
+                for pattern in self.arch_info['stack_alloc_patterns']:
+                    match = re.search(pattern, f"{mnemonic} {op_str}", re.IGNORECASE)
+                    if match:
+                        try:
+                            # 提取分配的字节数
+                            alloc_size = int(match.group(1), 16 if 'x' in match.group(1).lower() else 10)
+                            stack_size = max(stack_size, alloc_size)
+                        except (ValueError, IndexError):
+                            continue
+                
+                # 统计push指令
+                if mnemonic == 'push':
+                    push_count += 1
         
         # 加上push指令的栈消耗
         push_stack = push_count * self.arch_info['push_size']
@@ -247,6 +276,147 @@ class StackAnalyzer:
             total_stack = ((total_stack // alignment) + 1) * alignment
         
         return total_stack
+    
+    def _detect_loop_stack_allocation(self, instructions: List[Dict[str, Any]], 
+                                     addr_to_insn: Dict[int, Dict[str, Any]], 
+                                     func_name: str = "") -> int:
+        """
+        检测循环分配栈的模式
+        
+        模式识别：
+        1. lea -offset(%rsp),reg 计算目标地址
+        2. 循环内的 sub $size,%rsp 分配栈空间
+        3. jne/jnz 跳转回循环开始
+        
+        Args:
+            instructions: 指令列表
+            addr_to_insn: 地址到指令的映射
+            
+        Returns:
+            循环分配的栈空间大小（字节），如果未检测到则返回0
+        """
+        stack_pointer = self.arch_info['stack_pointer'][0]
+        frame_pointer = self.arch_info['frame_pointer'][0]
+        
+        # 查找 lea 指令计算目标地址的模式
+        # 格式1: lea reg, [rsp - 0xoffset]  (Capstone格式)
+        # 格式2: lea -0xoffset(%rsp), reg   (objdump格式)
+        lea_pattern = re.compile(
+            rf'lea\s+(\w+),\s*\[.*?{re.escape(stack_pointer)}.*?-\s*0x([0-9a-fA-F]+)\]|' +
+            rf'lea\s+-0x([0-9a-fA-F]+)\(.*?{re.escape(stack_pointer)}.*?\),\s*(\w+)',
+            re.IGNORECASE
+        )
+        
+        # 查找 sub 指令分配栈空间的模式
+        # 格式1: sub rsp, 0xsize  (Capstone格式)
+        # 格式2: sub $0xsize, %rsp (objdump格式)
+        sub_pattern = re.compile(
+            rf'sub\s+{re.escape(stack_pointer)},\s*0x([0-9a-fA-F]+)|' +
+            rf'sub\s+\$0x([0-9a-fA-F]+),\s*{re.escape(stack_pointer)}',
+            re.IGNORECASE
+        )
+        
+        for i, insn in enumerate(instructions):
+            mnemonic = insn['mnemonic'].lower()
+            op_str = insn['op_str'].lower()
+            insn_text = f"{mnemonic} {op_str}"
+            
+            # 查找 lea 指令计算目标地址
+            lea_match = lea_pattern.search(insn_text)
+            if lea_match:
+                # 匹配格式1: lea reg, [rsp - 0xoffset]
+                if lea_match.group(1) and lea_match.group(2):
+                    target_reg = lea_match.group(1)
+                    target_offset = int(lea_match.group(2), 16)
+                # 匹配格式2: lea -0xoffset(%rsp), reg
+                elif lea_match.group(3) and lea_match.group(4):
+                    target_offset = int(lea_match.group(3), 16)
+                    target_reg = lea_match.group(4)
+                else:
+                    continue
+                
+                # 在后续指令中查找循环
+                # 查找使用 target_reg 的比较指令和跳转指令
+                for j in range(i + 1, min(i + 50, len(instructions))):
+                    next_insn = instructions[j]
+                    next_mnemonic = next_insn['mnemonic'].lower()
+                    next_op_str = next_insn['op_str'].lower()
+                    next_insn_text = f"{next_mnemonic} {next_op_str}"
+                    
+                    # 查找循环内的 sub 指令
+                    sub_match = sub_pattern.search(next_insn_text)
+                    if sub_match:
+                        # 匹配格式1: sub rsp, 0xsize
+                        if sub_match.group(1):
+                            loop_step = int(sub_match.group(1), 16)
+                        # 匹配格式2: sub $0xsize, %rsp
+                        elif sub_match.group(2):
+                            loop_step = int(sub_match.group(2), 16)
+                        else:
+                            continue
+                        
+                        # 查找跳转指令回到循环开始
+                        # 检查后续指令是否有跳转到循环内的 sub 指令
+                        for k in range(j + 1, min(j + 10, len(instructions))):
+                            jump_insn = instructions[k]
+                            jump_mnemonic = jump_insn['mnemonic'].lower()
+                            jump_op_str = jump_insn['op_str'].lower()
+                            
+                            # 检查是否是条件跳转（jne, jnz, jz 等）
+                            if jump_mnemonic in ['jne', 'jnz', 'jz', 'je', 'jmp']:
+                                # 检查跳转目标是否是循环内的 sub 指令
+                                try:
+                                    jump_target = None
+                                    
+                                    # 方法1: 从跳转目标地址解析（0x格式）
+                                    jump_target_match = re.search(r'0x([0-9a-fA-F]+)', jump_op_str, re.IGNORECASE)
+                                    if jump_target_match:
+                                        jump_target = int(jump_target_match.group(1), 16)
+                                    else:
+                                        # 方法2: 从相对地址解析（如 <test+16>）
+                                        # 检查跳转目标是否指向循环内的 sub 指令
+                                        # 通过比较指令地址来判断
+                                        # 如果跳转指令指向 sub 指令之前，说明是循环
+                                        if jump_insn['address'] > next_insn['address']:
+                                            # 跳转指令在 sub 之后，且跳回 sub 之前，说明是循环
+                                            jump_target = next_insn['address']
+                                    
+                                    if jump_target is not None:
+                                        # 检查跳转目标是否在 sub 指令附近（循环内）
+                                        # 允许一定的误差范围（循环内可能有其他指令）
+                                        if abs(jump_target - next_insn['address']) < 100:
+                                            # 计算循环次数
+                                            loop_count = target_offset // loop_step
+                                            total_loop_stack = loop_count * loop_step
+                                            
+                                            # 查找循环后的额外栈分配
+                                            # 在跳转指令后查找 sub 指令
+                                            extra_stack = 0
+                                            for m in range(k + 1, min(k + 20, len(instructions))):
+                                                extra_insn = instructions[m]
+                                                extra_mnemonic = extra_insn['mnemonic'].lower()
+                                                extra_op_str = extra_insn['op_str'].lower()
+                                                extra_match = sub_pattern.search(f"{extra_mnemonic} {extra_op_str}")
+                                                if extra_match:
+                                                    # 匹配格式1: sub rsp, 0xsize
+                                                    if extra_match.group(1):
+                                                        extra_stack = int(extra_match.group(1), 16)
+                                                    # 匹配格式2: sub $0xsize, %rsp
+                                                    elif extra_match.group(2):
+                                                        extra_stack = int(extra_match.group(2), 16)
+                                                    else:
+                                                        continue
+                                                    break
+                                            
+                                            total_stack = total_loop_stack + extra_stack
+                                            logging.debug(f"检测到循环分配栈: {func_name}, "
+                                                        f"循环分配={total_loop_stack}, 额外={extra_stack}, 总计={total_stack}")
+                                            return total_stack
+                                except (ValueError, IndexError) as e:
+                                    logging.debug(f"解析跳转指令时出错: {e}")
+                                    continue
+        
+        return 0
     
     def _calculate_call_chain_stack(self) -> None:
         """计算函数调用链的总栈消耗并记录调用路径"""
@@ -596,6 +766,27 @@ class StackAnalyzer:
             if size == max_total_stack:
                 max_total_func = func
                 max_total_func_path = self.function_max_stack_paths.get(func, [])
+                
+                # 如果缓存路径不包含函数本身，需要修复路径
+                # 从 get_function_stack_info 获取完整路径
+                func_info = self.get_function_stack_info(func)
+                if func_info.get('found', False):
+                    max_total_func_path = func_info.get('max_stack_call_path', [])
+                    # 如果路径仍然不包含函数本身，添加函数名到开头
+                    if max_total_func_path and max_total_func_path[0] != func:
+                        # 检查路径是否以循环标记开始
+                        if max_total_func_path[0].startswith("[循环:"):
+                            # 如果以循环开始，函数应该在循环之前
+                            max_total_func_path = [func] + max_total_func_path
+                        else:
+                            # 其他情况，函数应该在路径开头
+                            max_total_func_path = [func] + max_total_func_path
+                elif not max_total_func_path or (max_total_func_path and max_total_func_path[0] != func):
+                    # 如果路径为空或第一个不是函数本身，添加函数名
+                    if max_total_func_path:
+                        max_total_func_path = [func] + max_total_func_path
+                    else:
+                        max_total_func_path = [func]
                 break
         
         # 栈使用分布
