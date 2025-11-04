@@ -261,27 +261,68 @@ class StackAnalyzer:
                 current_path = []
             
             # 检测循环调用：如果当前函数已经在路径中，说明形成了循环
+            # 但是，我们应该继续追踪该函数的最大栈消耗路径（即使会形成循环）
+            # 这样可以找到真正的最大栈消耗
             if func_name in current_path:
                 # 找到循环的起点
                 cycle_start_idx = current_path.index(func_name)
                 cycle_path = current_path[cycle_start_idx:] + [func_name]
                 
-                # 计算循环中所有函数的栈消耗总和
-                cycle_stack = 0
+                # 计算循环中所有函数的本地栈帧总和
+                cycle_local_stack = 0
                 for func in cycle_path[:-1]:  # 不包括最后一个重复的函数
                     func_stack = self.function_stack_frames.get(func, 0)
                     if func not in self.function_stack_frames:
                         func_stack = self.EXTERNAL_FUNC_STACK_ESTIMATES.get(func, 32)
-                    cycle_stack += func_stack
+                    cycle_local_stack += func_stack
                 
-                # 估算递归深度为10层
-                recursive_stack = cycle_stack * 10
+                # 继续追踪 func_name 的最大栈消耗路径（即使会形成循环）
+                # 使用已缓存的结果来获取其真实的栈消耗，避免重复计算
+                max_callee_stack = 0
+                max_callee_path = []
                 
-                # 构建循环标记：只返回循环标记，不包含路径前缀
-                # 因为 func_name 已经在 current_path 中，上层函数会正确拼接
+                if func_name in call_graph:
+                    for callee in call_graph.successors(func_name):
+                        # 使用已缓存的结果来获取被调用函数的最大栈消耗
+                        # 即使被调用函数在循环路径中，我们也应该继续追踪它的其他调用链
+                        if callee in visited:
+                            callee_stack = self.function_max_stack.get(callee, 0)
+                            cached_path = self.function_max_stack_paths.get(callee, [])
+                            # 从缓存路径中提取从函数开始的路径
+                            if cached_path and callee in cached_path:
+                                callee_idx = cached_path.index(callee)
+                                callee_path = cached_path[callee_idx:]
+                            else:
+                                callee_path = [callee]
+                        else:
+                            # 如果还没有计算过，使用空路径来计算（避免循环检测）
+                            callee_stack, callee_path = calculate_max_stack_with_path(
+                                callee, []  # 使用空路径，避免循环检测
+                            )
+                        
+                        if callee_stack > max_callee_stack:
+                            max_callee_stack = callee_stack
+                            max_callee_path = callee_path
+                
+                # 计算循环的总栈消耗：循环本地栈 * 递归深度 + 最大子调用链栈消耗
+                recursive_depth = 10
+                recursive_stack = cycle_local_stack * recursive_depth + max_callee_stack
+                
+                # 构建循环标记和后续调用链
                 cycle_funcs = ' → '.join(cycle_path[:-1])
-                recursive_path = [f"[循环: {cycle_funcs}] (递归 x10)"]
+                if max_callee_path:
+                    # 如果还有后续调用链，添加到循环标记后面
+                    recursive_path = [f"[循环: {cycle_funcs}] (递归 x{recursive_depth})"] + max_callee_path
+                else:
+                    recursive_path = [f"[循环: {cycle_funcs}] (递归 x{recursive_depth})"]
                 
+                # 保存到缓存（完整路径包含 current_path）
+                full_path = current_path + recursive_path
+                self.function_max_stack[func_name] = recursive_stack
+                self.function_max_stack_paths[func_name] = full_path
+                visited.add(func_name)
+                
+                # 返回从当前函数开始的路径（不包含 current_path）
                 return recursive_stack, recursive_path
             
             # 检测直接递归（函数调用自己）
@@ -326,9 +367,12 @@ class StackAnalyzer:
                         func_idx = cached_full_path.index(func_name)
                         cached_path = cached_full_path[func_idx:]
                     else:
+                        # 如果函数不在缓存路径中，只返回函数本身
                         cached_path = [func_name]
                 else:
+                    # 如果缓存路径为空，只返回函数本身
                     cached_path = [func_name]
+                
                 return self.function_max_stack.get(func_name, 0), cached_path
             
             calculating.add(func_name)
