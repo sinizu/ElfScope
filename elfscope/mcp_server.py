@@ -514,7 +514,7 @@ if FASTMCP_AVAILABLE:
     )
     
     # 注册所有工具
-    @mcp.tool()
+    @mcp.tool(name="elfscope_info")
     def tool_elfscope_info(elf_file: str) -> dict:
         """获取 ELF 文件的基本信息
         
@@ -525,7 +525,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_info(elf_file)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_analyze")
     def tool_elfscope_analyze(
         elf_file: str,
         include_stats: bool = True,
@@ -542,7 +542,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_analyze(elf_file, include_stats, include_details)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_paths")
     def tool_elfscope_paths(
         elf_file: str,
         target_function: str,
@@ -563,7 +563,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_paths(elf_file, target_function, source_function, max_depth, include_cycles)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_complete")
     def tool_elfscope_complete(elf_file: str) -> dict:
         """执行完整的 ELF 文件分析
         
@@ -574,7 +574,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_complete(elf_file)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_function")
     def tool_elfscope_function(elf_file: str, function_name: str) -> dict:
         """分析特定函数的详细信息
         
@@ -586,7 +586,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_function(elf_file, function_name)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_summary")
     def tool_elfscope_summary(elf_file: str) -> dict:
         """生成 ELF 文件的分析摘要报告
         
@@ -597,7 +597,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_summary(elf_file)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_stack")
     def tool_elfscope_stack(elf_file: str, function_name: str) -> dict:
         """分析指定函数的栈使用情况
         
@@ -609,7 +609,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_stack(elf_file, function_name)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_stack_summary")
     def tool_elfscope_stack_summary(elf_file: str, top: int = 10) -> dict:
         """生成程序的栈使用情况摘要
         
@@ -621,7 +621,7 @@ if FASTMCP_AVAILABLE:
         """
         return elfscope_stack_summary(elf_file, top)
     
-    @mcp.tool()
+    @mcp.tool(name="elfscope_objdump")
     def tool_elfscope_objdump(
         elf_file: str,
         disassemble: bool = False,

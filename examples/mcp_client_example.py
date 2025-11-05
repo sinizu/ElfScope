@@ -38,7 +38,7 @@ class ElfScopeMCPClient:
         self.request_id = 0
     
     def start(self):
-        """启动 MCP 服务器进程"""
+        """启动 MCP 服务器进程并完成初始化握手"""
         try:
             self.process = subprocess.Popen(
                 [self.server_command],
@@ -49,10 +49,60 @@ class ElfScopeMCPClient:
                 bufsize=1
             )
             print(f"✓ MCP 服务器已启动 (PID: {self.process.pid})")
+            
+            # 执行 MCP 初始化握手
+            self._initialize()
+            
         except FileNotFoundError:
             print(f"✗ 错误: 找不到命令 '{self.server_command}'")
             print("   请确保已安装 ElfScope 并运行: pip install -e .")
             sys.exit(1)
+    
+    def _initialize(self):
+        """执行 MCP 协议初始化握手"""
+        # 1. 发送 initialize 请求
+        self.request_id += 1
+        initialize_request = {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {}
+                },
+                "clientInfo": {
+                    "name": "elfscope-client-example",
+                    "version": "1.0.0"
+                }
+            },
+            "id": self.request_id
+        }
+        
+        request_json = json.dumps(initialize_request) + '\n'
+        self.process.stdin.write(request_json)
+        self.process.stdin.flush()
+        
+        # 2. 接收 initialize 响应
+        response_line = self.process.stdout.readline()
+        if not response_line:
+            raise RuntimeError("MCP 服务器无响应（初始化阶段）")
+        
+        response = json.loads(response_line)
+        if "error" in response:
+            raise RuntimeError(f"MCP 初始化失败: {response['error']}")
+        
+        # 3. 发送 initialized 通知
+        initialized_notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized",
+            "params": {}
+        }
+        
+        notification_json = json.dumps(initialized_notification) + '\n'
+        self.process.stdin.write(notification_json)
+        self.process.stdin.flush()
+        
+        print("✓ MCP 协议握手完成")
     
     def stop(self):
         """停止 MCP 服务器进程"""
@@ -103,7 +153,19 @@ class ElfScopeMCPClient:
         if "error" in response:
             raise RuntimeError(f"MCP 错误: {response['error']}")
         
-        return response.get("result", {})
+        # 获取 MCP 结果
+        mcp_result = response.get("result", {})
+        
+        # MCP 工具返回格式: {'content': [{'type': 'text', 'text': '...'}], ...}
+        # 我们需要解析 content[0].text 中的 JSON
+        if "content" in mcp_result and len(mcp_result["content"]) > 0:
+            content_item = mcp_result["content"][0]
+            if content_item.get("type") == "text":
+                # 解析 JSON 字符串
+                return json.loads(content_item["text"])
+        
+        # 如果没有 content 字段，返回原始结果
+        return mcp_result
     
     def __enter__(self):
         """上下文管理器入口"""
