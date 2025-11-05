@@ -10,6 +10,7 @@
 - **调用路径查找**: 查找从父函数到子函数的所有可能调用路径
 - **🏗️ 栈使用分析**: 分析函数栈帧大小和调用链栈消耗（含调用路径追踪）⭐ **新功能**
 - **JSON 格式导出**: 将分析结果导出为结构化的 JSON 文件
+- **🔌 MCP 服务器支持**: 通过 Model Context Protocol 提供标准化 API 接口 ⭐ **新功能**
 
 ### 🛠️ 技术特点
 - **Clean Code**: 代码结构清晰，模块化设计，易于维护和扩展
@@ -199,6 +200,48 @@ elfscope stack-summary /path/to/binary -o stack_summary.json -t 10
 # 分析深度调用链的栈消耗
 elfscope stack /path/to/binary deep_function
 ```
+
+## 🔌 MCP 服务器使用
+
+ElfScope 支持 **Model Context Protocol (MCP)**，可以作为 MCP 服务器运行，供 AI 助手和其他应用程序调用。
+
+### 启动 MCP 服务器
+
+```bash
+# 使用命令行启动
+elfscope-mcp
+
+# 或者直接运行模块
+python -m elfscope.mcp_server
+```
+
+### Claude Desktop 配置
+
+在 Claude Desktop 配置文件中添加：
+
+```json
+{
+  "mcpServers": {
+    "elfscope": {
+      "command": "elfscope-mcp"
+    }
+  }
+}
+```
+
+### 可用的 MCP 工具
+
+- `elfscope_info` - 获取 ELF 文件基本信息
+- `elfscope_analyze` - 分析函数调用关系
+- `elfscope_paths` - 查找调用路径
+- `elfscope_complete` - 完整分析
+- `elfscope_function` - 分析特定函数
+- `elfscope_summary` - 生成摘要报告
+- `elfscope_stack` - 栈使用分析
+- `elfscope_stack_summary` - 栈使用摘要
+- `elfscope_objdump` - objdump 功能
+
+详细文档请参考 [MCP_README.md](MCP_README.md)
 
 ## Python API 使用
 

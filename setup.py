@@ -37,6 +37,7 @@ setup(
     entry_points={
         "console_scripts": [
             "elfscope=elfscope.cli:main",
+            "elfscope-mcp=elfscope.mcp_server:main",
         ],
     },
     keywords="elf, binary analysis, reverse engineering, call graph, disassembly",

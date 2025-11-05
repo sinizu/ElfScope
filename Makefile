@@ -1,6 +1,6 @@
 # Makefile for ElfScope
 
-.PHONY: help install test test-unit test-integration test-cov clean lint format check-deps demo
+.PHONY: help install test test-unit test-integration test-cov clean lint format check-deps demo mcp-server test-mcp mcp-example
 
 # 默认目标
 help:
@@ -12,11 +12,14 @@ help:
 	@echo "  test-unit      - 运行单元测试"
 	@echo "  test-integration - 运行集成测试"
 	@echo "  test-cov       - 运行测试并生成覆盖率报告"
+	@echo "  test-mcp       - 运行 MCP 服务器测试"
 	@echo "  lint           - 代码检查"
 	@echo "  format         - 代码格式化"
 	@echo "  clean          - 清理临时文件"
 	@echo "  check-deps     - 检查依赖"
 	@echo "  demo           - 运行演示"
+	@echo "  mcp-server     - 启动 MCP 服务器"
+	@echo "  mcp-example    - 运行 MCP 客户端示例"
 
 # 安装项目
 install:
@@ -80,4 +83,26 @@ demo:
 		python -m elfscope.cli info /bin/ls || true; \
 	else \
 		echo "/bin/ls 不存在，跳过演示"; \
+	fi
+
+# 启动 MCP 服务器
+mcp-server:
+	@echo "启动 ElfScope MCP 服务器..."
+	@echo "服务器将通过 stdio 进行通信"
+	@echo "按 Ctrl+C 停止服务器"
+	python -m elfscope.mcp_server
+
+# 运行 MCP 测试
+test-mcp:
+	@echo "运行 MCP 服务器测试..."
+	pytest tests/test_mcp_server.py -v
+
+# 运行 MCP 客户端示例
+mcp-example:
+	@echo "运行 MCP 客户端示例..."
+	@if [ -f /bin/ls ]; then \
+		python examples/mcp_client_example.py /bin/ls; \
+	else \
+		echo "错误: /bin/ls 不存在"; \
+		echo "请指定一个有效的 ELF 文件路径"; \
 	fi
